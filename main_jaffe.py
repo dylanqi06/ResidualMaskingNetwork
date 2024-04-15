@@ -44,10 +44,10 @@ def main(config_path):
 
     # init trainer and make a training
     # from trainers.fer2013_trainer import FER2013Trainer
-    from trainers.tta_trainer import FER2013Trainer
+    from trainers.tta_trainer import JaffeTrainer
 
     # from trainers.centerloss_trainer import FER2013Trainer
-    trainer = FER2013Trainer(model, train_set, val_set, test_set, configs)
+    trainer = JaffeTrainer(model, train_set, val_set, test_set, configs)
 
     if configs["distributed"] == 1:
         ngpus = torch.cuda.device_count()
