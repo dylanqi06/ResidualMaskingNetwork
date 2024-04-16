@@ -1,22 +1,23 @@
 """this class build and run a trainer by a configuration"""
 import datetime
 import os
+import traceback
 
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-from torchvision.transforms import transforms
 from tqdm import tqdm
 
+from utils.generals import make_batch
 from utils.metrics.metrics import accuracy
 from utils.radam import RAdam
 
 # from torch.optim import Adam as RAdam
 # from torch.optim import SGD as RAdam
-
 
 EMO_DICT = {0: "an", 1: "di", 2: "fe", 3: "ha", 4: "sa", 5: "su", 6: "ne"}
 
@@ -57,14 +58,14 @@ class JaffeTrainer(Trainer):
             num_classes=configs["num_classes"],
         )
 
-        self._model.fc = nn.Linear(512, 7)
+        # self._model.fc = nn.Linear(512, 7)
+        # self._model.fc = nn.Linear(256, 7)
         self._model = self._model.to(self._device)
 
         if self._distributed == 1:
             torch.distributed.init_process_group(backend="nccl")
-            self._model = nn.parallel.DistributedDataParallel(
-                self._model, find_unused_parameters=True
-            )
+            self._model = nn.parallel.DistributedDataParallel(self._model)
+
             self._train_loader = DataLoader(
                 self._train_set,
                 batch_size=self._batch_size,
@@ -84,7 +85,7 @@ class JaffeTrainer(Trainer):
 
             self._test_loader = DataLoader(
                 self._test_set,
-                batch_size=self._batch_size,
+                batch_size=1,
                 num_workers=self._num_workers,
                 pin_memory=True,
                 shuffle=False,
@@ -107,7 +108,7 @@ class JaffeTrainer(Trainer):
             )
             self._test_loader = DataLoader(
                 self._test_set,
-                batch_size=self._batch_size,
+                batch_size=1,
                 num_workers=self._num_workers,
                 pin_memory=True,
                 shuffle=False,
@@ -143,6 +144,13 @@ class JaffeTrainer(Trainer):
             verbose=True,
         )
 
+        """ TODO set step size equal to configs
+        self._scheduler = StepLR(
+            self._optimizer,
+            step_size=self._configs['steplr']
+        )
+        """
+
         # training info
         self._start_time = datetime.datetime.now()
         self._start_time = self._start_time.replace(microsecond=0)
@@ -150,31 +158,43 @@ class JaffeTrainer(Trainer):
         log_dir = os.path.join(
             self._configs["cwd"],
             self._configs["log_dir"],
-            "{}_{}".format(
-                self._configs["model_name"], self._start_time.strftime("%Y%b%d_%H.%M")
+            "{}_{}_{}".format(
+                self._configs["arch"],
+                self._configs["model_name"],
+                self._start_time.strftime("%Y%b%d_%H.%M"),
             ),
         )
-
         self._writer = SummaryWriter(log_dir)
-        self._train_loss = []
-        self._train_acc = []
-        self._val_loss = []
-        self._val_acc = []
-        self._best_loss = 1e9
-        self._best_acc = 0
+        self._train_loss_list = []
+        self._train_acc_list = []
+        self._val_loss_list = []
+        self._val_acc_list = []
+        self._best_val_loss = 1e9
+        self._best_val_acc = 0
+        self._best_train_loss = 1e9
+        self._best_train_acc = 0
         self._test_acc = 0.0
         self._plateau_count = 0
         self._current_epoch_num = 0
 
         # for checkpoints
-        self._checkpoint_dir = os.path.join(self._configs["cwd"], "saved/checkpoints")
+        # really?
+        # self._checkpoint_dir = os.path.join(self._configs["cwd"], "saved/checkpoints")
+        # if not os.path.exists(self._checkpoint_dir):
+        #     os.makedirs(self._checkpoint_dir, exist_ok=True)
+
+        self._checkpoint_dir = os.path.join(
+            self._configs["cwd"], self._configs["checkpoint_dir"]
+        )
         if not os.path.exists(self._checkpoint_dir):
-            os.makedirs(checkpoint_dir, exist_ok=True)
+            os.makedirs(self._checkpoint_dir, exist_ok=True)
 
         self._checkpoint_path = os.path.join(
             self._checkpoint_dir,
-            "{}_{}".format(
-                self._configs["model_name"], self._start_time.strftime("%Y%b%d_%H.%M")
+            "{}_{}_{}".format(
+                self._configs["arch"],
+                self._configs["model_name"],
+                self._start_time.strftime("%Y%b%d_%H.%M"),
             ),
         )
 
@@ -205,8 +225,8 @@ class JaffeTrainer(Trainer):
             self._optimizer.step()
 
         i += 1
-        self._train_loss.append(train_loss / i)
-        self._train_acc.append(train_acc / i)
+        self._train_loss_list.append(train_loss / i)
+        self._train_acc_list.append(train_acc / i)
 
     def _val(self):
         self._model.eval()
@@ -230,157 +250,182 @@ class JaffeTrainer(Trainer):
                 val_acc += acc.item()
 
             i += 1
-            self._val_loss.append(val_loss / i)
-            self._val_acc.append(val_acc / i)
+            self._val_loss_list.append(val_loss / i)
+            self._val_acc_list.append(val_acc / i)
 
     def _calc_acc_on_private_test(self):
         self._model.eval()
         test_acc = 0.0
         print("Calc acc on private test..")
-
+        f = open("private_test_log.txt", "w")
         with torch.no_grad():
             for i, (images, targets) in tqdm(
                 enumerate(self._test_loader), total=len(self._test_loader), leave=False
             ):
 
-                # TODO: implement augment when predict
                 images = images.cuda(non_blocking=True)
                 targets = targets.cuda(non_blocking=True)
 
                 outputs = self._model(images)
+                print(outputs.shape, outputs)
                 acc = accuracy(outputs, targets)[0]
                 test_acc += acc.item()
+                f.writelines("{}_{}\n".format(i, acc.item()))
 
             test_acc = test_acc / (i + 1)
         print("Accuracy on private test: {:.3f}".format(test_acc))
+        f.close()
         return test_acc
 
     def _calc_acc_on_private_test_with_tta(self):
         self._model.eval()
         test_acc = 0.0
-        print("Calc acc on private test..")
-
-        transform = transforms.Compose(
-            [
-                transforms.ToPILImage(),
-            ]
+        print("Calc acc on private test with tta..")
+        f = open(
+            "private_test_log_{}_{}.txt".format(
+                self._configs["arch"], self._configs["model_name"]
+            ),
+            "w",
         )
 
-        for idx in len(self._test_set):
-            image, label = self._test_set[idx]
-
         with torch.no_grad():
-            for i, (images, targets) in tqdm(
-                enumerate(self._test_loader), total=len(self._test_loader), leave=False
+            for idx in tqdm(
+                range(len(self._test_set)), total=len(self._test_set), leave=False
             ):
+                images, targets = self._test_set[idx]
+                targets = torch.LongTensor([targets])
 
-                # TODO: implement augment when predict
+                images = make_batch(images)
                 images = images.cuda(non_blocking=True)
                 targets = targets.cuda(non_blocking=True)
 
                 outputs = self._model(images)
+                outputs = F.softmax(outputs, 1)
+
+                # outputs.shape [tta_size, 7]
+                outputs = torch.sum(outputs, 0)
+
+                outputs = torch.unsqueeze(outputs, 0)
+                # print(outputs.shape)
+                # TODO: try with softmax first and see the change
                 acc = accuracy(outputs, targets)[0]
                 test_acc += acc.item()
+                f.writelines("{}_{}\n".format(idx, acc.item()))
 
-            test_acc = test_acc / (i + 1)
-        print("Accuracy on private test: {:.3f}".format(test_acc))
-        return test_acc
-
-    def _calc_acc_on_private_test(self):
-        self._model.eval()
-        test_acc = 0.0
-        print("Calc acc on private test..")
-
-        with torch.no_grad():
-            for i, (images, targets) in tqdm(
-                enumerate(self._test_loader), total=len(self._test_loader), leave=False
-            ):
-
-                # TODO: implement augment when predict
-                images = images.cuda(non_blocking=True)
-                targets = targets.cuda(non_blocking=True)
-
-                outputs = self._model(images)
-                acc = accuracy(outputs, targets)[0]
-                test_acc += acc.item()
-
-            test_acc = test_acc / (i + 1)
-        print("Accuracy on private test: {:.3f}".format(test_acc))
+            test_acc = test_acc / (idx + 1)
+        print("Accuracy on private test with tta: {:.3f}".format(test_acc))
+        f.close()
         return test_acc
 
     def train(self):
         """make a training job"""
-        print(self._model)
-        while not self._is_stop():
-            self._increase_epoch_num()
-            self._train()
-            self._val()
+        # print(self._model)
 
-            self._update_training_state()
-            self._logging()
+        # freeze the model
+
+        """
+        print('=' * 10)
+        for idx, child in enumerate(self._model.children()):
+            if idx < 6:
+                print(child)
+                print('=' * 10)
+
+                for m in child.parameters():
+                    m.requires_grad = False
+          """
+
+        # exit(0)
+
+        try:
+            while not self._is_stop():
+                self._increase_epoch_num()
+                self._train()
+                self._val()
+
+                self._update_training_state()
+                self._logging()
+        except KeyboardInterrupt:
+            traceback.print_exc()
 
         # training stop
         try:
+            # state = torch.load('saved/checkpoints/resatt18_rot30_2019Nov06_18.56')
             state = torch.load(self._checkpoint_path)
             if self._distributed:
                 self._model.module.load_state_dict(state["net"])
             else:
                 self._model.load_state_dict(state["net"])
-            # self._test_acc = self._calc_acc_on_private_test()
-            self._calc_acc_on_private_test_with_tta()
-            self._save_weights()
-        except Exception as e:
-            print("Testing error when training stop")
-            print(e)
 
-        self._writer.add_text(
-            "Summary", "Converged after {} epochs".format(self._current_epoch_num)
-        )
+            if not self._test_set.is_tta():
+                self._test_acc = self._calc_acc_on_private_test()
+            else:
+                self._test_acc = self._calc_acc_on_private_test_with_tta()
+
+            # self._test_acc = self._calc_acc_on_private_test()
+            self._save_weights()
+        except Exception:
+            traceback.print_exc()
+
+        consume_time = str(datetime.datetime.now() - self._start_time)
         self._writer.add_text(
             "Summary",
-            "Best validation accuracy: {:.3f}".format(self._current_epoch_num),
+            "Converged after {} epochs, consume {}".format(
+                self._current_epoch_num, consume_time[:-7]
+            ),
         )
         self._writer.add_text(
-            "Summary", "Private test accuracy: {:.3f}".format(self._test_acc)
+            "Results", "Best validation accuracy: {:.3f}".format(self._best_val_acc)
+        )
+        self._writer.add_text(
+            "Results", "Best training accuracy: {:.3f}".format(self._best_train_acc)
+        )
+        self._writer.add_text(
+            "Results", "Private test accuracy: {:.3f}".format(self._test_acc)
         )
         self._writer.close()
 
     def _update_training_state(self):
-        if self._val_acc[-1] > self._best_acc:
+        if self._val_acc_list[-1] > self._best_val_acc:
             self._save_weights()
             self._plateau_count = 0
-            self._best_acc = self._val_acc[-1]
-            self._best_loss = self._val_loss[-1]
+            self._best_val_acc = self._val_acc_list[-1]
+            self._best_val_loss = self._val_loss_list[-1]
+            self._best_train_acc = self._train_acc_list[-1]
+            self._best_train_loss = self._train_loss_list[-1]
         else:
             self._plateau_count += 1
 
-        self._scheduler.step(100 - self._val_acc[-1])
+        # self._scheduler.step(self._train_loss_list[-1])
+        self._scheduler.step(100 - self._val_acc_list[-1])
+        # self._scheduler.step()
 
     def _logging(self):
         consume_time = str(datetime.datetime.now() - self._start_time)
 
         message = "\nE{:03d}  {:.3f}/{:.3f}/{:.3f} {:.3f}/{:.3f}/{:.3f} | p{:02d}  Time {}\n".format(
             self._current_epoch_num,
-            self._train_loss[-1],
-            self._val_loss[-1],
-            self._best_loss,
-            self._train_acc[-1],
-            self._val_acc[-1],
-            self._best_acc,
+            self._train_loss_list[-1],
+            self._val_loss_list[-1],
+            self._best_val_loss,
+            self._train_acc_list[-1],
+            self._val_acc_list[-1],
+            self._best_val_acc,
             self._plateau_count,
             consume_time[:-7],
         )
 
         self._writer.add_scalar(
-            "Accuracy/Train", self._train_acc[-1], self._current_epoch_num
+            "Accuracy/Train", self._train_acc_list[-1], self._current_epoch_num
         )
         self._writer.add_scalar(
-            "Accuracy/Val", self._val_acc[-1], self._current_epoch_num
+            "Accuracy/Val", self._val_acc_list[-1], self._current_epoch_num
         )
         self._writer.add_scalar(
-            "Loss/Train", self._train_loss[-1], self._current_epoch_num
+            "Loss/Train", self._train_loss_list[-1], self._current_epoch_num
         )
-        self._writer.add_scalar("Loss/Val", self._val_loss[-1], self._current_epoch_num)
+        self._writer.add_scalar(
+            "Loss/Val", self._val_loss_list[-1], self._current_epoch_num
+        )
 
         print(message)
 
@@ -403,12 +448,14 @@ class JaffeTrainer(Trainer):
         state = {
             **self._configs,
             "net": state_dict,
-            "best_loss": self._best_loss,
-            "best_acc": self._best_acc,
-            "train_losses": self._train_loss,
-            "val_loss": self._val_loss,
-            "train_acc": self._train_acc,
-            "val_acc": self._val_acc,
+            "best_val_loss": self._best_val_loss,
+            "best_val_acc": self._best_val_acc,
+            "best_train_loss": self._best_train_loss,
+            "best_train_acc": self._best_train_acc,
+            "train_losses": self._train_loss_list,
+            "val_loss_list": self._val_loss_list,
+            "train_acc_list": self._train_acc_list,
+            "val_acc_list": self._val_acc_list,
             "test_acc": self._test_acc,
         }
 
