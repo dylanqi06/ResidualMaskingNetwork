@@ -1,6 +1,6 @@
 {
 	"data_path": "data/jaffed/",
-	"image_size": 256,
+	"image_size": 224,
 	"in_channels": 3,
 	"num_classes": 7,
 	"arch": "resnet34",

@@ -13,9 +13,9 @@ EMOTION_DICT = {
     1: "disgust",
     2: "fear",
     3: "happy",
-    4: "neutral",
-    5: "sad",
-    6: "surprise",
+    4: "sad",
+    5: "surprise",
+    6: "neutral",
 }
 
 
@@ -81,7 +81,7 @@ if __name__ == "__main__":
         "train",
         {
             "data_path": "/data/jaffed/",
-            "image_size": 256,
+            "image_size": 224,
             "in_channels": 3,
         },
     )
