@@ -44,7 +44,7 @@ def main(config_path):
 
     # init trainer and make a training
     # from trainers.fer2013_trainer import FER2013Trainer
-    from trainers.tta_trainer import JaffeTrainer
+    from trainers.jaffe_trainer import JaffeTrainer
 
     # from trainers.centerloss_trainer import FER2013Trainer
     trainer = JaffeTrainer(model, train_set, val_set, test_set, configs)
