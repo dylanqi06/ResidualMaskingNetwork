@@ -29,7 +29,7 @@ class Trainer(object):
         pass
 
 
-class JaffeTrainer(Trainer):
+class ChineseTrainer(Trainer):
     """for classification task"""
 
     def __init__(self, model, train_set, val_set, test_set, configs):
@@ -115,23 +115,14 @@ class JaffeTrainer(Trainer):
             )
 
         # define loss function (criterion) and optimizer
-        # class_weights = [
-        #     7.1,
-        #     7.34,
-        #     6.66,
-        #     6.87,
-        #     7.1,
-        #     6.87,
-        #     7.1,
-        # ]
         class_weights = [
-            7.39,
-            7.73,
-            5.86,
-            7.08,
-            6.54,
-            8.10,
-            6.8,
+            6.588,
+            6.588,
+            7.304,
+            6.857,
+            7.0,
+            7.906,
+            6.928,
         ]
         class_weights = torch.FloatTensor(np.array(class_weights))
 
