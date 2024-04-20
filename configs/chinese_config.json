@@ -3,7 +3,7 @@
 	"image_size": 224,
 	"in_channels": 3,
 	"num_classes": 7,
-	"arch": "resmasking_dropout2",
+	"arch": "resmasking",
 	"lr":  0.0001,
 	"weighted_loss": 0,
 	"momentum": 0.9,
