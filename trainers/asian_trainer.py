@@ -325,7 +325,7 @@ class AsianTrainer(Trainer):
         f.close()
         cm = confusion_matrix(all_targets, all_predictions)
         cm_percent = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
-        class_names = [EMO_DICT[i] for i in range(len(EMO_DICT))]
+        class_names = ['Angry','Disgust','Fear','Happy','Sad','Surprise','Neutral']
         plt.figure(figsize=(8, 6))
         sns.heatmap(cm_percent, annot=True, fmt='.2f', cmap='Blues', xticklabels=class_names, yticklabels=class_names)
         plt.xlabel('Predicted label')
