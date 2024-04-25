@@ -330,7 +330,9 @@ class AsianTrainer(Trainer):
         plt.xlabel('Predicted label')
         plt.ylabel('True label')
         plt.title('Confusion Matrix for Facial Emotion Recognition')
-        plt.show()
+        plt.savefig('confusion_matrix_asian.png')
+        print("The confusion matrix plot has been saved as 'confusion_matrix.png'.")
+        plt.close()
         return test_acc
 
     def train(self):
