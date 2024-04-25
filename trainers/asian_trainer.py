@@ -324,12 +324,13 @@ class AsianTrainer(Trainer):
         print("Accuracy on private test with tta: {:.3f}".format(test_acc))
         f.close()
         cm = confusion_matrix(all_targets, all_predictions)
+        cm_percent = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
         class_names = [EMO_DICT[i] for i in range(len(EMO_DICT))]
         plt.figure(figsize=(8, 6))
-        sns.heatmap(cm, annot=True, fmt='g', cmap='Blues', xticklabels=class_names, yticklabels=class_names)
+        sns.heatmap(cm_percent, annot=True, fmt='.2f', cmap='Blues', xticklabels=class_names, yticklabels=class_names)
         plt.xlabel('Predicted label')
         plt.ylabel('True label')
-        plt.title('Confusion Matrix for Facial Emotion Recognition')
+        plt.title('Asian dataset with resnet34')
         plt.savefig('confusion_matrix_asian.png')
         print("The confusion matrix plot has been saved as 'confusion_matrix.png'.")
         plt.close()
