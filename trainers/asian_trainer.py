@@ -15,6 +15,9 @@ from tqdm import tqdm
 from utils.generals import make_batch
 from utils.metrics.metrics import accuracy
 from utils.radam import RAdam
+from sklearn.metrics import confusion_matrix
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 # from torch.optim import Adam as RAdam
 # from torch.optim import SGD as RAdam
@@ -280,6 +283,8 @@ class AsianTrainer(Trainer):
     def _calc_acc_on_private_test_with_tta(self):
         self._model.eval()
         test_acc = 0.0
+        all_predictions = []
+        all_targets = []
         print("Calc acc on private test with tta..")
         f = open(
             "private_test_log_{}_{}.txt".format(
@@ -294,6 +299,7 @@ class AsianTrainer(Trainer):
             ):
                 images, targets = self._test_set[idx]
                 targets = torch.LongTensor([targets])
+                all_targets.extend(targets.cpu().numpy()) #added
 
                 images = make_batch(images)
                 images = images.cuda(non_blocking=True)
@@ -311,10 +317,19 @@ class AsianTrainer(Trainer):
                 acc = accuracy(outputs, targets)[0]
                 test_acc += acc.item()
                 f.writelines("{}_{}\n".format(idx, acc.item()))
+                _, predicted = torch.max(outputs, 1)
+                all_predictions.extend(predicted.cpu().numpy())
 
             test_acc = test_acc / (idx + 1)
         print("Accuracy on private test with tta: {:.3f}".format(test_acc))
         f.close()
+        cm = confusion_matrix(all_targets, all_predictions)
+        plt.figure(figsize=(8, 6))
+        sns.heatmap(cm, annot=True, fmt='g', cmap='Blues', xticklabels=self._configs['class_names'], yticklabels=self._configs['class_names'])
+        plt.xlabel('Predicted label')
+        plt.ylabel('True label')
+        plt.title('Confusion Matrix for Facial Emotion Recognition')
+        plt.show()
         return test_acc
 
     def train(self):
