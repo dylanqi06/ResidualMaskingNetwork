@@ -365,6 +365,9 @@ class EafeTrainer(Trainer):
                 self._logging()
         except KeyboardInterrupt:
             traceback.print_exc()
+        finally:
+            self.save_model(os.path.join(self._checkpoint_dir, 'eafe_model.pth'))
+
 
         # training stop
         try:
@@ -479,3 +482,15 @@ class EafeTrainer(Trainer):
         }
 
         torch.save(state, self._checkpoint_path)
+    def save_model(self, path):
+        """
+        Save the model's state_dict to the specified path.
+
+        Parameters:
+        -----------
+        path : str
+            The file path where to save the model state.
+        """
+        model_state_dict = self._model.state_dict() if not self._distributed else self._model.module.state_dict()
+        torch.save(model_state_dict, path)
+        print(f"Model saved successfully to {path}")
