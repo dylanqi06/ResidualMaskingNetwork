@@ -18,5 +18,9 @@
 	"steplr": 50,
 	"log_dir": "log",
 	"checkpoint_dir": "checkpoint",
-	"model_name": "test"
+	"model_name": "test",
+	"save_every_epoch": 5,
+	"save_on_improvement": true,
+	"model_save_path": "saved_models/"
+
 }
