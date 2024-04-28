@@ -36,6 +36,10 @@ def main(config_path):
     # load configs and set random seed
     configs = json.load(open(config_path))
     configs["cwd"] = os.getcwd()
+    # Ensure model save directory exists
+    model_save_dir = os.path.join(configs["cwd"], configs.get("model_save_path", "saved_models"))
+    if not os.path.exists(model_save_dir):
+        os.makedirs(model_save_dir)
 
     # load model and data_loader
     model = get_model(configs)
@@ -49,11 +53,16 @@ def main(config_path):
     # from trainers.centerloss_trainer import FER2013Trainer
     trainer = EafeTrainer(model, train_set, val_set, test_set, configs)
 
-    if configs["distributed"] == 1:
-        ngpus = torch.cuda.device_count()
-        mp.spawn(trainer.train, nprocs=ngpus, args=())
-    else:
-        trainer.train()
+    try:
+        if configs["distributed"] == 1:
+            ngpus = torch.cuda.device_count()
+            mp.spawn(trainer.train, nprocs=ngpus, args=())
+        else:
+            trainer.train()
+    finally:
+        # Optionally save the model at the end of all training
+        final_model_path = os.path.join(model_save_dir, 'eafe_model.pth')
+        trainer.save_model(final_model_path)
 
 
 def get_model(configs):
