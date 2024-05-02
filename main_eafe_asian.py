@@ -84,13 +84,12 @@ def get_dataset(configs):
     """
     This function get raw dataset
     """
-    from utils.datasets.eafe import eafe2022
-    from utils.datasets.asian import asian2023
+    from utils.datasets.eafe_asian import eafe_asian
 
     # todo: add transform
-    train_set = eafe2022("train", configs)
-    val_set = eafe2022("val", configs)
-    test_set = asian2023("test", configs, tta=True, tta_size=10)
+    train_set = eafe_asian("train", configs)
+    val_set = eafe_asian("val", configs)
+    test_set = eafe_asian("test", configs, tta=True, tta_size=10)
     return train_set, val_set, test_set
     # now we are at stage, need to decide the dataset
 

@@ -29,7 +29,7 @@ class EAFE(Dataset):
         self._image_size = (configs["image_size"], configs["image_size"])
 
         self._data = pd.read_csv(
-            os.path.join(configs["data_path"], "eafe/{}.csv".format(stage))
+            os.path.join(configs["data_path"], "{}.csv".format(stage))
         )
 
         self._pixels = self._data["pixels"].tolist()

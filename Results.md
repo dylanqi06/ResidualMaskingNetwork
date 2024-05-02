@@ -104,3 +104,11 @@ Accuracy on private test with tta: 42.165
 | **resnet18**            | 66.704  | 87.619 | 81.900 | 36.407 |
 | **resatt18**            | 68.738  | 89.524 | 82.700 | 42.165 |
 
+
+ResNet18 
+ResNet34 
+ResNet50 
+ResAtt18 
+ResAtt34 
+ResMask 
+ResMask_Dropout

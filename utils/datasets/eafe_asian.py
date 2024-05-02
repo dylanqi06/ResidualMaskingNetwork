@@ -19,7 +19,7 @@ EMOTION_DICT = {
 }
 
 
-class ASIAN(Dataset):
+class EAFE_asian(Dataset):
     def __init__(self, stage, configs, tta=False, tta_size=48):
         self._stage = stage
         self._configs = configs
@@ -72,15 +72,15 @@ class ASIAN(Dataset):
         return image, target
 
 
-def asian2023(stage, configs=None, tta=False, tta_size=48):
-    return ASIAN(stage, configs, tta, tta_size)
+def eafe_asian(stage, configs=None, tta=False, tta_size=48):
+    return EAFE_asian(stage, configs, tta, tta_size)
 
 
 if __name__ == "__main__":
-    data = ASIAN(
+    data = EAFE_asian(
         "train",
         {
-            "data_path": "/data/asian/",
+            "data_path": "/data/eafe/",
             "image_size": 224,
             "in_channels": 3,
         },
